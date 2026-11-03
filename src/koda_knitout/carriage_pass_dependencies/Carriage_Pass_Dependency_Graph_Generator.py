@@ -20,7 +20,9 @@ class Carriage_Pass_Dependency_Graph_Generator:
     def __init__(self, knitout_dependency_generator: Knitout_Dependency_Graph_Generator):
         self.knitout_dependency_generator: Knitout_Dependency_Graph_Generator = knitout_dependency_generator
         self.carriage_pass_dependency_graph: networkx.DiGraph = networkx.DiGraph()
-        self.open_carriage_passes: set[Carriage_Pass] = set()
+        # Carriage_Pass hashes by its wall-clock creation time, so a set of passes iterates in a different order on every run.
+        # A dict keyed by pass (values unused) keeps creation order instead, which makes pass selection reproducible.
+        self.open_carriage_passes: dict[Carriage_Pass, None] = {}
         self.instructions_to_carriage_pass: dict[Needle_Instruction, Carriage_Pass] = {}
         self.form_carriage_passes()
 
@@ -49,22 +51,22 @@ class Carriage_Pass_Dependency_Graph_Generator:
         """
         :param instruction: The instruction to find a mergable open carriage pass for.
         :return: Return an open carriage pass by greedy selection that can merge with the given instruction without creating cycles in the carriage pass graph.
+        Among several such passes, the earliest created is chosen.
         Otherwise, return None if there is no open carriage pass that meets this criteria.
         """
         if isinstance(instruction, Loop_Making_Instruction):
             yarn_order_cp = self._yarn_order_receptive_carriage_pass(instruction)
             if yarn_order_cp is None or not self.carriage_pass_is_open(yarn_order_cp):
                 return None
-            dep_free_cp = self._receptive_carriage_passes(instruction, {yarn_order_cp})
+            dep_free_cp = self._receptive_carriage_passes(instruction, [yarn_order_cp])
         else:
-            receptive_cp = self._receptive_carriage_passes(instruction, self.open_carriage_passes)
+            receptive_cp = self._receptive_carriage_passes(instruction, list(self.open_carriage_passes))
             dep_free_cp = self._dependency_free_carriage_passes(instruction, receptive_cp)
         cycle_free_cp = self.cycle_free_carriage_passes(instruction, dep_free_cp)
         if len(cycle_free_cp) == 0:
             return None
         else:
-            for cp in cycle_free_cp:
-                return cp
+            return cycle_free_cp[0]
 
     def carriage_pass_is_open(self, carriage_pass: Carriage_Pass) -> bool:
         """
@@ -73,9 +75,9 @@ class Carriage_Pass_Dependency_Graph_Generator:
         """
         return carriage_pass in self.open_carriage_passes
 
-    def _receptive_carriage_passes(self, instruction: Needle_Instruction, carriage_passes: set[Carriage_Pass]) -> set[Carriage_Pass]:
+    def _receptive_carriage_passes(self, instruction: Needle_Instruction, carriage_passes: list[Carriage_Pass]) -> list[Carriage_Pass]:
         rack, all_needle = self.get_instruction_rack(instruction)
-        return set(cp for cp in carriage_passes if cp.can_add_instruction(instruction, rack, all_needle))
+        return [cp for cp in carriage_passes if cp.can_add_instruction(instruction, rack, all_needle)]
 
     def _yarn_order_receptive_carriage_pass(self, instruction: Loop_Making_Instruction) -> Carriage_Pass | None:
         """
@@ -91,33 +93,34 @@ class Carriage_Pass_Dependency_Graph_Generator:
                     return self.instructions_to_carriage_pass[pred]  # Note, assumes all predecessors are already included in the carriage pass structure.
         return None
 
-    def _dependency_free_carriage_passes(self, instruction: Needle_Instruction, carriage_passes: set[Carriage_Pass]) -> set[Carriage_Pass]:
-        dep_free_cp = set()
+    def _dependency_free_carriage_passes(self, instruction: Needle_Instruction, carriage_passes: list[Carriage_Pass]) -> list[Carriage_Pass]:
+        dep_free_cp = []
         for cp in carriage_passes:
             preds_in_cp = cp.instruction_set().intersection(self.knitout_dependency_graph.predecessors(instruction))
             if len(preds_in_cp) == 0:  # No dependencies within this set.
-                dep_free_cp.add(cp)
+                dep_free_cp.append(cp)
             elif len(preds_in_cp) == 1:  # Only one dependency, but this must only be a yarn-order dependency
                 for pred in preds_in_cp:
                     deps = self.knitout_dependency_generator.get_edge_dependencies(pred, instruction)
                     if len(deps) == 1:
                         for dep in deps:
                             if dep is Knitout_Dependency.Yarn_Order:  # only a yarn-order dependency
-                                dep_free_cp.add(cp)
+                                dep_free_cp.append(cp)
         return dep_free_cp
 
-    def cycle_free_carriage_passes(self, instruction: Needle_Instruction, carriage_passes: set[Carriage_Pass]) -> set[Carriage_Pass]:
+    def cycle_free_carriage_passes(self, instruction: Needle_Instruction, carriage_passes: list[Carriage_Pass]) -> list[Carriage_Pass]:
         """
 
         :param instruction: The instruction to search for passes to.
         :param carriage_passes: The carriage passes to consider paths from.
             This operation is expensive per carriage pass. This set should be minimized by more cost-effective criteria.
-        :return: The subset of carriage passes that have no path to this instruction.
+        :return: The carriage passes that have no path to this instruction, in the order given.
             These passes will not create a cycle-dependency to this carriage pass
         """
-        predecessor_cp = set(self.instructions_to_carriage_pass[pred] for pred in self.knitout_dependency_graph.predecessors(instruction))
+        # A dict keyed by pass rather than a set, so the passes iterate in a reproducible order (Carriage_Pass hashes by wall-clock time).
+        predecessor_cp = dict.fromkeys(self.instructions_to_carriage_pass[pred] for pred in self.knitout_dependency_graph.predecessors(instruction))
         # Note: assumes that predecessors are already assigned to carriage pass
-        cycle_free_cp = set()
+        cycle_free_cp = []
         for cp in carriage_passes:
             no_paths = True
             for pred_cp in predecessor_cp:
@@ -125,7 +128,7 @@ class Carriage_Pass_Dependency_Graph_Generator:
                     no_paths = False
                     break
             if no_paths:
-                cycle_free_cp.add(cp)
+                cycle_free_cp.append(cp)
         return cycle_free_cp
 
     def add_needle_instruction(self, instruction: Needle_Instruction):
@@ -166,7 +169,7 @@ class Carriage_Pass_Dependency_Graph_Generator:
     def _new_carriage_pass(self, instruction):
         rack, all_needle = self.get_instruction_rack(instruction)
         cp = Carriage_Pass(instruction, rack, all_needle)
-        self.open_carriage_passes.add(cp)
+        self.open_carriage_passes[cp] = None
         self.carriage_pass_dependency_graph.add_node(cp)
         self._integrate_instruction_into_carriage_pass(cp, instruction)
 
@@ -208,10 +211,12 @@ class Carriage_Pass_Dependency_Graph_Generator:
                                          if Knitout_Dependency.Yarn_Order in self.knitout_dependency_generator.get_edge_dependencies(pred, instruction)]
         if instruction in self.instructions_to_carriage_pass:
             instruction_cp = self.instructions_to_carriage_pass[instruction]
-            prior_yarn_order_cp = set(self.instructions_to_carriage_pass[pred] for pred in prior_yarn_order_instructions if pred not in instruction_cp)
-            self.open_carriage_passes.difference_update(prior_yarn_order_cp)
+            for pred in prior_yarn_order_instructions:
+                if pred not in instruction_cp:
+                    self.open_carriage_passes.pop(self.instructions_to_carriage_pass[pred], None)
         else:
-            self.open_carriage_passes.difference_update(prior_yarn_order_instructions)
+            for pred in prior_yarn_order_instructions:
+                self.open_carriage_passes.pop(pred, None)
 
     def form_carriage_passes(self):
         """
