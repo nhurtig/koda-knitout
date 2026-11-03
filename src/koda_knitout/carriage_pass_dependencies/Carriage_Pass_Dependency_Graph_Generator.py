@@ -21,6 +21,7 @@ class Carriage_Pass_Dependency_Graph_Generator:
         self.knitout_dependency_generator: Knitout_Dependency_Graph_Generator = knitout_dependency_generator
         self.carriage_pass_dependency_graph: networkx.DiGraph = networkx.DiGraph()
         self.open_carriage_passes: set[Carriage_Pass] = set()
+        self.carriage_pass_creation_index: dict[Carriage_Pass, int] = {}
         self.instructions_to_carriage_pass: dict[Needle_Instruction, Carriage_Pass] = {}
         self.form_carriage_passes()
 
@@ -63,8 +64,8 @@ class Carriage_Pass_Dependency_Graph_Generator:
         if len(cycle_free_cp) == 0:
             return None
         else:
-            for cp in cycle_free_cp:
-                return cp
+            # Carriage_Pass hashes by wall-clock time, so set order isn't reproducible; pick the earliest-created pass.
+            return min(cycle_free_cp, key=self.carriage_pass_creation_index.__getitem__)
 
     def carriage_pass_is_open(self, carriage_pass: Carriage_Pass) -> bool:
         """
@@ -166,6 +167,7 @@ class Carriage_Pass_Dependency_Graph_Generator:
     def _new_carriage_pass(self, instruction):
         rack, all_needle = self.get_instruction_rack(instruction)
         cp = Carriage_Pass(instruction, rack, all_needle)
+        self.carriage_pass_creation_index[cp] = len(self.carriage_pass_creation_index)
         self.open_carriage_passes.add(cp)
         self.carriage_pass_dependency_graph.add_node(cp)
         self._integrate_instruction_into_carriage_pass(cp, instruction)
