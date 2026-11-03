@@ -7,7 +7,6 @@ build-backend = "hatchling.build"
 name = "koda-knitout"
 dynamic = ["version"]
 description = 'KODA (Knitting Optimization by Dependency Analysis). A system for analyzing the dependencies between knitout operations executed on a knitting machine and supports the optimization of knitout programs using this dependency structure. '
-omepage = "https://github.com/mhofmann-Khoury/koda-knitout"
 repository = "https://github.com/mhofmann-Khoury/koda-knitout"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -25,14 +24,15 @@ classifiers = [
   "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-  "networkx~=3.2.1",
-  "plotly~=5.22.0",
-  "virtual-knitting-machine~=0.0.2",
-  "knitout-interpreter~=0.0.2",
-  "knit-graphs~=0.0.1",
+  "knitout-interpreter==0.0.13",
+  "virtual-knitting-machine==0.0.13",
+  "knit-graphs==0.0.6",
+  "networkx==3.2.1",
+  "plotly==5.22.0",
 ]
 
 [project.urls]
+Homepage = "https://github.com/mhofmann-Khoury/koda-knitout"
 Documentation = "https://github.com/mhofmann-Khoury/koda-knitout#readme"
 Issues = "https://github.com/mhofmann-Khoury/koda-knitout/issues"
 Source = "https://github.com/mhofmann-Khoury/koda-knitout"

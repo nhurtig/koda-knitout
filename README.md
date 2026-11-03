@@ -19,6 +19,17 @@ A system for analyzing the dependencies between knitout operations executed on a
 pip install koda-knitout
 ```
 
+## Use as a submodule
+
+```console
+git submodule add git@github.com:nhurtig/koda-knitout.git koda-knitout
+pip install -r koda-knitout/requirements.txt
+python3 koda-knitout/koda_cli.py infile.k outfile.k
+```
+
+With the versions pinned in `requirements.txt`, the input must not use negative
+needle indices, `x-` extension lines, or drops.
+
 ## License
 
 `koda-knitout` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.

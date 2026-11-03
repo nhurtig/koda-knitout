@@ -1,4 +1,3 @@
-from knit_script.interpret_knit_script import knit_script_to_knitout
 from knitout_interpreter.knitout_compilers.compile_knitout import compile_knitout
 from knitout_interpreter.knitout_language.Knitout_Context import Knitout_Context
 from knitout_interpreter.knitout_operations.Header_Line import get_machine_header
@@ -63,6 +62,7 @@ def optimize_knitscript(ks_file: str, unoptimized_k_name: str, optimized_file_na
     :param optimized_file_name: The name of the optimized knitout resulting form the knitscript file.
     :param ks_args: The keyword arguments for the knitscript program.
     """
+    from knit_script.interpret_knit_script import knit_script_to_knitout
     knit_script_to_knitout(ks_file, unoptimized_k_name, pattern_is_filename=True, **ks_args)
     if unoptimized_dat_name is not None:
         compile_knitout(unoptimized_k_name, unoptimized_dat_name)
